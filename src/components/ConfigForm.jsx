@@ -1,9 +1,71 @@
-import React, { useEffect, useRef } from 'react';
-import { Save, Play, Plus, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
+import {
+  Box,
+  Typography,
+  TextField,
+  Button,
+  Grid,
+  Paper,
+  FormControlLabel,
+  Checkbox,
+  MenuItem,
+  IconButton,
+  Stack,
+  Chip,
+  Divider,
+  Alert,
+  LinearProgress,
+  InputAdornment
+} from '@mui/material';
+import {
+  Save as SaveIcon,
+  PlayArrow as PlayArrowIcon,
+  Add as AddIcon,
+  Close as CloseIcon,
+  FolderOpen as FolderOpenIcon
+} from '@mui/icons-material';
 
-const ConfigForm = ({ config, onChange, onSave, onBuild, buildStatus, buildOutput }) => {
+const ConfigForm = ({ config, onChange, onSave, onBuild, buildStatus, buildOutput, currentProject }) => {
+  const [inputValues, setInputValues] = useState({
+    inject: '',
+    safeDomain: ''
+  });
+
+  const showSnackbar = (message, severity = 'info') => {
+    // 这里应该通过某种方式显示提示消息
+    // 由于ConfigForm组件中没有snackbar状态，我们可以使用原生alert作为临时方案
+    if (severity === 'error') {
+      alert(message);
+    }
+  };
+
+  // 表单验证
+  const validateForm = () => {
+    if (!config.url?.trim()) {
+      return { isValid: false, error: 'URL是必填项' };
+    }
+    
+    if (!config.name?.trim()) {
+      return { isValid: false, error: '应用名称是必填项' };
+    }
+    
+    // 检查应用名称是否包含中文
+    const chineseRegex = /[\u4e00-\u9fa5]/;
+    if (chineseRegex.test(config.name)) {
+      return { isValid: false, error: '应用名称不能包含中文' };
+    }
+    
+    return { isValid: true };
+  };
+
+  // 配置更新处理
   const updateConfig = (key, value) => {
+    // 如果是图标字段且值为空，则设置默认图标路径
+    if (key === 'icon' && !value) {
+      // 使用默认图标路径
+      value = '../src-tauri/icons/icon.ico';
+    }
     onChange({ ...config, [key]: value });
   };
 
@@ -18,7 +80,8 @@ const ConfigForm = ({ config, onChange, onSave, onBuild, buildStatus, buildOutpu
 
   const addToArray = (key, value) => {
     if (value.trim()) {
-      updateConfig(key, [...config[key], value.trim()]);
+      updateConfig(key, [...(config[key] || []), value.trim()]);
+      setInputValues(prev => ({ ...prev, [key]: '' }));
     }
   };
 
@@ -50,306 +113,346 @@ const ConfigForm = ({ config, onChange, onSave, onBuild, buildStatus, buildOutpu
     }
   };
 
-  const ArrayInput = ({ label, configKey, placeholder }) => {
-    const [inputValue, setInputValue] = React.useState('');
-
-    return (
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-        <div className="space-y-2">
-          {config[configKey].map((item, index) => (
-            <div key={index} className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={item}
-                readOnly
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-              />
-              <button
-                onClick={() => removeFromArray(configKey, index)}
-                className="p-2 text-red-600 hover:bg-red-100 rounded-md"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ))}
-          <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder={placeholder}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  addToArray(configKey, inputValue);
-                  setInputValue('');
-                }
-              }}
-            />
-            <button
-              onClick={() => {
-                addToArray(configKey, inputValue);
-                setInputValue('');
-              }}
-              className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              <Plus size={16} />
-            </button>
-            <button
-              onClick={() => selectFileForArray(configKey, { multiple: false })}
-              className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-            >
-              <span className="text-xs">Browse</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  const handleSaveClick = async () => {
+    // 在保存前检查图标设置
+    let configToSave = { ...config };
+    
+    // 如果没有设置图标，使用默认图标
+    if (!configToSave.icon) {
+      configToSave.icon = '../src-tauri/icons/icon.ico';
+    }
+    
+    const { isValid, error } = validateForm();
+    if (isValid) {
+      // 传递更新后的配置
+      onChange(configToSave);
+      onSave();
+    } else {
+      // 显示错误提示
+      showSnackbar(error, 'error');
+    }
   };
 
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">Configuration</h2>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => {
-              if (!config.url.trim()) {
-                alert('URL is required.');
-                return;
+  const ArrayField = ({ label, configKey, placeholder, helperText }) => (
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="subtitle2" gutterBottom>
+        {label}
+      </Typography>
+      <Stack spacing={1}>
+        {config[configKey]?.map((item, index) => (
+          <Chip
+            key={index}
+            label={item}
+            onDelete={() => removeFromArray(configKey, index)}
+            color="primary"
+            variant="outlined"
+          />
+        ))}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <TextField
+            fullWidth
+            size="small"
+            value={inputValues[configKey]}
+            onChange={(e) => setInputValues(prev => ({ ...prev, [configKey]: e.target.value }))}
+            placeholder={placeholder}
+            helperText={helperText}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addToArray(configKey, inputValues[configKey]);
               }
-              if (!config.name.trim()) {
-                alert('Application Name is required.');
-                return;
-              }
-              onSave();
             }}
-            className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+          />
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => addToArray(configKey, inputValues[configKey])}
+            disabled={!inputValues[configKey]}
+            startIcon={<AddIcon />}
           >
-            <Save size={16} />
-            <span>Save</span>
-          </button>
-          <button
-            onClick={onBuild}
-            disabled={buildStatus === 'building'}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
-              buildStatus === 'building' 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
+            Add
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={() => selectFileForArray(configKey, { multiple: false })}
+            startIcon={<FolderOpenIcon />}
           >
-            <Play size={16} />
-            <span>{buildStatus === 'building' ? 'Building...' : 'Build'}</span>
-          </button>
-        </div>
-      </div>
+            Browse
+          </Button>
+        </Box>
+      </Stack>
+    </Box>
+  );
 
-      {buildStatus && (
-        <div className="mb-6 p-4 rounded-lg bg-gray-100">
-          <h3 className="font-medium text-gray-900 mb-2">Build Status</h3>
-          <div 
-            ref={buildOutputRef}
-            className={`p-3 rounded font-mono text-sm max-h-60 overflow-y-auto ${
-              buildStatus === 'error' ? 'bg-red-100 text-red-800' : 
-              buildStatus === 'success' ? 'bg-green-100 text-green-800' : 
-              'bg-blue-100 text-blue-800'
-            }`}
+  const FileField = ({ label, configKey, placeholder, filters }) => (
+    <TextField
+      fullWidth
+      label={label}
+      value={config[configKey] || ''}
+      onChange={(e) => updateConfig(configKey, e.target.value)}
+      placeholder={placeholder}
+      margin="normal"
+      InputProps={{
+        endAdornment: (
+          <InputAdornment position="end">
+            <IconButton
+              onClick={() => selectFile(configKey, { filters })}
+              edge="end"
+            >
+              <FolderOpenIcon />
+            </IconButton>
+          </InputAdornment>
+        ),
+      }}
+    />
+  );
+
+  return (
+    <Box sx={{ p: 3 }}>
+      {/* Actions */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <Typography variant="h6" component="h2">
+          {currentProject ? `编辑项目: ${currentProject.name}` : '新建项目'}
+        </Typography>
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleSaveClick}
+            disabled={!config.url?.trim() || !config.name?.trim()}
+            startIcon={<SaveIcon />}
           >
-            {buildOutput || `Build status: ${buildStatus}`}
-          </div>
-        </div>
+            保存
+          </Button>
+          <Button
+            variant="contained"
+            onClick={onBuild}
+            disabled={buildStatus === 'building' || !config.url?.trim() || !config.name?.trim()}
+            startIcon={<PlayArrowIcon />}
+          >
+            {buildStatus === 'building' ? '构建中...' : '构建'}
+          </Button>
+        </Stack>
+      </Box>
+
+      {/* Build Status */}
+      {buildStatus && (
+        <Paper sx={{ p: 2, mb: 3 }} variant="outlined">
+          <Typography variant="subtitle1" gutterBottom>
+            构建状态
+          </Typography>
+          {buildStatus === 'building' && (
+            <LinearProgress sx={{ mb: 1 }} />
+          )}
+          <Alert 
+            severity={
+              buildStatus === 'error' ? 'error' :
+              buildStatus === 'success' ? 'success' :
+              'info'
+            }
+            sx={{
+              '& .MuiAlert-message': {
+                width: '100%'
+              }
+            }}
+          >
+            <Box
+              ref={buildOutputRef}
+              sx={{
+                maxHeight: 200,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                lineHeight: '0.625rem' // 将行高设置为紧凑显示，约为原来三分之一
+              }}
+            >
+              {buildOutput || `构建状态: ${buildStatus}`}
+            </Box>
+          </Alert>
+        </Paper>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Grid container spacing={3}>
         {/* Basic Settings */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-900">Basic Settings</h3>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">URL *</label>
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={config.url}
-                onChange={(e) => updateConfig('url', e.target.value)}
-                placeholder="https://example.com or file:///path/to/file.html"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-              />
-              <button
-                onClick={() => selectFile('url', { 
-                  filters: [{
-                    name: 'Web Files',
-                    extensions: ['html', 'htm', 'txt']
-                  }]
-                })}
-                className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-              >
-                Browse
-              </button>
-            </div>
-          </div>
+        <Grid item xs={12} md={6} sx={{ width: '100%' }}>
+          <Paper sx={{ p: 3 }} variant="outlined">
+            <Typography variant="subtitle1" gutterBottom>
+              基本设置
+            </Typography>
+            
+            <TextField
+              fullWidth
+              required
+              label="URL"
+              value={config.url || ''}
+              onChange={(e) => updateConfig('url', e.target.value)}
+              placeholder="https://example.com"
+              margin="normal"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => selectFile('url', { 
+                        filters: [{
+                          name: 'HTML Files',
+                          extensions: ['html', 'htm']
+                        }, {
+                          name: 'All Files',
+                          extensions: ['*']
+                        }]
+                      })}
+                      edge="end"
+                    >
+                      <FolderOpenIcon />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Application Name</label>
-            <input
-              type="text"
-              value={config.name}
+            <TextField
+              fullWidth
+              required
+              label="应用名称"
+              value={config.name || ''}
               onChange={(e) => updateConfig('name', e.target.value)}
               placeholder="MyApp"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              margin="normal"
+              error={config.name && /[\u4e00-\u9fa5]/.test(config.name)}
+              helperText={config.name && /[\u4e00-\u9fa5]/.test(config.name) ? '应用名称不能包含中文' : ''}
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Icon Path</label>
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={config.icon}
-                onChange={(e) => updateConfig('icon', e.target.value)}
-                placeholder="/path/to/icon.png"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-              />
-              <button
-                onClick={() => selectFile('icon', {
-                  filters: [{
-                    name: 'Image Files',
-                    extensions: ['png', 'ico', 'jpg', 'jpeg']
-                  }]
-                })}
-                className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-              >
-                Browse
-              </button>
-            </div>
-          </div>
+            <FileField
+              label="图标"
+              configKey="icon"
+              placeholder="/path/to/icon.png"
+              filters={[{
+                name: 'Image Files',
+                extensions: ['png', 'ico', 'jpg', 'jpeg']
+              }]}
+            />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Width</label>
-              <input
-                type="number"
-                value={config.width}
-                onChange={(e) => updateConfig('width', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Height</label>
-              <input
-                type="number"
-                value={config.height}
-                onChange={(e) => updateConfig('height', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              />
-            </div>
-          </div>
-        </div>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="宽度"
+                  value={config.width || 1200}
+                  onChange={(e) => updateConfig('width', parseInt(e.target.value))}
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="高度"
+                  value={config.height || 780}
+                  onChange={(e) => updateConfig('height', parseInt(e.target.value))}
+                />
+              </Grid>
+            </Grid>
+          </Paper>
+        </Grid>
 
         {/* Advanced Settings */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-900">Advanced Settings</h3>
+        <Grid item xs={12} md={6} sx={{ width: '100%' }}>
+          <Paper sx={{ p: 3 }} variant="outlined">
+            <Typography variant="subtitle1" gutterBottom>
+              高级设置
+            </Typography>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">User Agent</label>
-            <input
-              type="text"
-              value={config.userAgent}
+            <TextField
+              fullWidth
+              label="User Agent"
+              value={config.userAgent || ''}
               onChange={(e) => updateConfig('userAgent', e.target.value)}
               placeholder="Custom user agent string"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              margin="normal"
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Activation Shortcut</label>
-            <input
-              type="text"
-              value={config.activationShortcut}
+            <TextField
+              fullWidth
+              label="快捷键"
+              value={config.activationShortcut || ''}
               onChange={(e) => updateConfig('activationShortcut', e.target.value)}
               placeholder="CmdOrControl+Shift+P"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              margin="normal"
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">System Tray Icon</label>
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                value={config.systemTrayIcon}
-                onChange={(e) => updateConfig('systemTrayIcon', e.target.value)}
-                placeholder="/path/to/tray-icon.png"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
-              />
-              <button
-                onClick={() => selectFile('systemTrayIcon', {
-                  filters: [{
-                    name: 'Image Files',
-                    extensions: ['png', 'ico', 'jpg', 'jpeg']
-                  }]
-                })}
-                className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-              >
-                Browse
-              </button>
-            </div>
-          </div>
+            <FileField
+              label="系统托盘图标"
+              configKey="systemTrayIcon"
+              placeholder="/path/to/tray-icon.png"
+              filters={[{
+                name: 'Image Files',
+                extensions: ['png', 'ico', 'jpg', 'jpeg']
+              }]}
+            />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Targets (Linux)</label>
-            <select
-              value={config.targets}
+            <TextField
+              select
+              fullWidth
+              label="Linux 目标格式"
+              value={config.targets || 'all'}
               onChange={(e) => updateConfig('targets', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              margin="normal"
             >
-              <option value="all">All (deb + appimage)</option>
-              <option value="deb">DEB</option>
-              <option value="appimage">AppImage</option>
-            </select>
-          </div>
+              <MenuItem value="all">All (deb + appimage)</MenuItem>
+              <MenuItem value="deb">DEB</MenuItem>
+              <MenuItem value="appimage">AppImage</MenuItem>
+            </TextField>
 
-          <ArrayInput
-            label="Inject Files"
-            configKey="inject"
-            placeholder="path/to/script.js or path/to/style.css"
-          />
+            <ArrayField
+              label="注入文件"
+              configKey="inject"
+              placeholder="path/to/script.js or path/to/style.css"
+              helperText="按回车添加新项"
+            />
 
-          <ArrayInput
-            label="Safe Domains"
-            configKey="safeDomain"
-            placeholder="example.com"
-          />
-        </div>
+            <ArrayField
+              label="安全域名"
+              configKey="safeDomain"
+              placeholder="example.com"
+              helperText="按回车添加新项"
+            />
+          </Paper>
+        </Grid>
 
-        {/* Boolean Options */}
-        <div className="md:col-span-2 space-y-4">
-          <h3 className="text-lg font-medium text-gray-900">Options</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { key: 'useLocalFile', label: 'Use Local File' },
-              { key: 'fullscreen', label: 'Start Fullscreen' },
-              { key: 'hideTitleBar', label: 'Hide Title Bar (Mac)' },
-              { key: 'multiArch', label: 'Multi-Arch (Mac)' },
-              { key: 'debug', label: 'Debug Mode' },
-              { key: 'alwaysOnTop', label: 'Always On Top' },
-              { key: 'showSystemTray', label: 'Show System Tray' }
-            ].map(({ key, label }) => (
-              <label key={key} className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={config[key]}
-                  onChange={(e) => updateConfig(key, e.target.checked)}
-                  className="rounded"
-                />
-                <span className="text-sm text-gray-700">{label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+        {/* Options */}
+        <Grid item xs={12} sx={{ width: '100%' }}>
+          <Paper sx={{ p: 3 }} variant="outlined">
+            <Typography variant="subtitle1" gutterBottom>
+              选项
+            </Typography>
+            <Grid container spacing={2}>
+              {[
+                { key: 'useLocalFile', label: '使用本地文件' },
+                { key: 'fullscreen', label: '全屏启动' },
+                { key: 'hideTitleBar', label: '隐藏标题栏 (Mac)' },
+                { key: 'multiArch', label: '多架构 (Mac)' },
+                { key: 'debug', label: '调试模式' },
+                { key: 'alwaysOnTop', label: '窗口置顶' },
+                { key: 'showSystemTray', label: '显示系统托盘' }
+              ].map(({ key, label }) => (
+                <Grid item xs={12} sm={6} md={3} key={key}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={config[key] || false}
+                        onChange={(e) => updateConfig(key, e.target.checked)}
+                      />
+                    }
+                    label={label}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Paper>
+        </Grid>
+      </Grid>
+    </Box>
   );
 };
 

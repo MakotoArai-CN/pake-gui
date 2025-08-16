@@ -1,9 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Copy, Terminal, Edit, Check, X } from 'lucide-react';
+import { Box, Typography, Paper, Button, Grid, Divider } from '@mui/material';
+import { ContentCopy as CopyIcon } from '@mui/icons-material';
+import { listen } from '@tauri-apps/api/event';
 
 const CommandPreview = ({ config }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedCommand, setEditedCommand] = useState('');
+  const buildOutputRef = useRef(null);
+  const [buildOutput, setBuildOutput] = useState('');
+
+  // 监听构建输出事件
+  useEffect(() => {
+    const unlisten = listen('build-output', (event) => {
+      const newOutput = event.payload;
+      setBuildOutput(prev => prev + '\n' + newOutput);
+    });
+
+    return () => {
+      unlisten.then(unlistenFn => unlistenFn());
+    };
+  }, []);
+
+  // 滚动到最新的日志
+  useEffect(() => {
+    if (buildOutputRef.current) {
+      buildOutputRef.current.scrollTop = buildOutputRef.current.scrollHeight;
+    }
+  }, [buildOutput]);
 
   const generateCommand = () => {
     const parts = ['pake'];
@@ -65,88 +89,98 @@ const CommandPreview = ({ config }) => {
   const command = isEditing ? editedCommand : generateCommand();
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">Command Preview</h2>
-        <div className="flex space-x-2">
-          {isEditing ? (
-            <>
-              <button
-                onClick={saveEditing}
-                className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
-              >
-                <Check size={16} />
-                <span>Save</span>
-              </button>
-              <button
-                onClick={cancelEditing}
-                className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
-              >
-                <X size={16} />
-                <span>Cancel</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={startEditing}
-                className="flex items-center space-x-2 bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700"
-              >
-                <Edit size={16} />
-                <span>Edit</span>
-              </button>
-              <button
-                onClick={copyToClipboard}
-                className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700"
-              >
-                <Copy size={16} />
-                <span>Copy</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-        <div className="flex items-center space-x-2 mb-2">
-          <Terminal size={16} />
-          <span className="text-gray-400">Terminal</span>
-        </div>
-        {isEditing ? (
-          <textarea
-            value={editedCommand}
-            onChange={(e) => setEditedCommand(e.target.value)}
-            className="w-full bg-gray-900 text-green-400 font-mono text-sm resize-none focus:outline-none"
-            rows={4}
-          />
-        ) : (
-          <pre 
-            className="whitespace-pre-wrap break-all cursor-pointer hover:bg-gray-800 p-1 rounded"
-            onClick={startEditing}
+    <Box sx={{ p: 3, width: '100%' }}>
+      <Grid container spacing={3}>
+        <Grid item xs={12} sx={{ width: '100%' }}>
+          <Typography variant="h6" component="h2" gutterBottom>
+            Command Preview
+          </Typography>
+          <Paper 
+            variant="outlined" 
+            sx={{ 
+              p: 2, 
+              bgcolor: 'grey.50',
+              position: 'relative',
+              width: '100%'
+            }}
           >
-            {command}
-          </pre>
-        )}
-      </div>
+            <Box sx={{ display: 'inline', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+              <div className="inline items-center space-x-2 mb-2">
+                <Terminal size={16} />
+                <span className="text-gray-400">Terminal</span>
+              </div>
+              <Button
+                startIcon={<CopyIcon />}
+                onClick={copyToClipboard}
+                size="small"
+                variant="outlined"
+                sx={{ 
+                  borderRadius: '20px',
+                  textTransform: 'none',
+                  position: 'absolute',
+                  right: '20px',
+                  top: '5px',
+                }}
+              >
+                Copy
+              </Button>
+            </Box>
+            <div className="bg-gray-900 text-green-400 rounded-lg font-mono text-sm overflow-x-auto w-full">
+              {isEditing ? (
+                <textarea
+                  value={editedCommand}
+                  onChange={(e) => setEditedCommand(e.target.value)}
+                  className="w-full bg-gray-900 text-green-400 font-mono text-sm resize-none focus:outline-none"
+                  rows={4}
+                />
+              ) : (
+                <pre 
+                  className="whitespace-pre-wrap break-all cursor-pointer hover:bg-gray-800 p-4 rounded w-full"
+                  onClick={startEditing}
+                >
+                  {command}
+                </pre>
+              )}
+            </div>
+          </Paper>
+        </Grid>
 
-      <div className="mt-6">
-        <h3 className="font-medium text-gray-900 mb-3">Configuration Summary</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div className="space-y-2">
-            <div><strong>URL:</strong> {config.url || 'Not specified'}</div>
-            <div><strong>App Name:</strong> {config.name || 'Not specified'}</div>
-            <div><strong>Window Size:</strong> {config.width} x {config.height}</div>
-            <div><strong>Debug Mode:</strong> {config.debug ? 'Enabled' : 'Disabled'}</div>
-          </div>
-          <div className="space-y-2">
-            <div><strong>Fullscreen:</strong> {config.fullscreen ? 'Yes' : 'No'}</div>
-            <div><strong>Always On Top:</strong> {config.alwaysOnTop ? 'Yes' : 'No'}</div>
-            <div><strong>System Tray:</strong> {config.showSystemTray ? 'Yes' : 'No'}</div>
-            <div><strong>Injected Files:</strong> {config.inject?.length || 0}</div>
-          </div>
-        </div>
-      </div>
-    </div>
+        {buildOutput && (
+          <Grid item xs={12}>
+            <Typography variant="h6" component="h2" gutterBottom>
+              Build Status
+            </Typography>
+            <Paper 
+              variant="outlined" 
+              sx={{ 
+                p: 2,
+                width: '100%'
+              }}
+            >
+              <Box
+                ref={buildOutputRef}
+                sx={{
+                  maxHeight: 400,
+                  minHeight: 200,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.2,
+                  p: 2,
+                  bgcolor: 'grey.900',
+                  color: 'grey.100',
+                  borderRadius: '4px',
+                  width: '100%'
+                }}
+              >
+                {buildOutput || 'Waiting for build...\nBuild output will be displayed here'}
+              </Box>
+            </Paper>
+          </Grid>
+        )}
+      </Grid>
+    </Box>
   );
 };
 

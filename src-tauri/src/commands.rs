@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use tauri_plugin_shell::ShellExt;
 use std::path::PathBuf;
 use tauri::{Manager, Emitter};
+use std::process::Command as StdCommand;
 
 #[tauri::command]
 pub async fn get_projects() -> Result<Vec<Project>, String> {
@@ -262,6 +263,39 @@ pub async fn build_pake_app(
             }
             _ => {}
         }
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_path(path: String) -> Result<(), String> {
+    // 使用系统默认方式打开路径（文件或目录）
+    #[cfg(target_os = "windows")]
+    {
+        // Windows系统使用explorer命令
+        StdCommand::new("explorer")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        // macOS系统使用open命令
+        StdCommand::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        // Linux系统使用xdg-open命令
+        StdCommand::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
     }
     
     Ok(())

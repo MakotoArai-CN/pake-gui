@@ -2,9 +2,9 @@
 name = "pake-gui"
 version = "1.0.0"
 description = "GUI for Pake CLI tool"
-authors = ["you"]
-license = ""
-repository = ""
+authors = ["MakotoArai"]
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/MakotoArai-CN/pake-gui"
 edition = "2021"
 
 [build-dependencies]

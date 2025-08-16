@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
-mod project;
 mod environment;
+mod project;
 
 use commands::*;
 
@@ -22,7 +22,8 @@ fn main() {
             check_environment,
             install_tool,
             update_pake_config,
-            build_pake_app
+            build_pake_app,
+            open_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
